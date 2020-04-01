@@ -1,0 +1,41 @@
+//Criação da Tabela Calendário em M
+//alterar onde tabelafato[data] para o nome da tabela e coluna onde conteém a data
+
+let
+    MenorData = List.Min (tabelafato[data]),
+    MaiorData = List.Max (tabelafato[data]),
+    MenorAno = Date.Year(MenorData),
+    MaiorAno = Date.Year(MaiorData),
+    DataInicio = #date(MenorAno,1,1),
+    DataFim = #date(MaiorAno,12,31),
+    Dias = Duration.Days(DataFim- DataInicio) +1,
+    ListarDatas = List.Dates(MenorData, Dias, #duration(1,0,0,0)),
+    Tabela = #table(
+        type table[
+            Data = date,
+            Ano = number,
+            Nome do Mes = text,
+            Mes Abrevido = text,
+            Mes e Ano = text,
+            Mes Num = number,
+            Mes Ano INT = number
+        ],
+        List.Transform(
+            ListarDatas,
+            each {
+                _,
+                Date.Year(_),
+                Text.Proper( Date.MonthName(_)),
+                Text.Proper(Text.Start(Date.MonthName(_), 3)),
+                Text.Start(Date.MonthName(_), 3) & "-" & Text.End(Text.From(Date.Year(_)), 2),
+                Date.Month(_),
+                Date.Year(_) * 100 + Date.Month(_)
+
+            }
+
+        )
+    )
+    
+    in
+
+    Tabela
