@@ -1,15 +1,20 @@
 let
 
-//Alterar somente a Tabela e a coluna de datas
-/* A Tabela é onde possui uma coluna Data que deseja usar em seus cálculos ou visuais. 
-Exemplo. Tabela fVendas que possui a coluna Data Pedido Ficaria List.Min (fVendas[Data Pedido]).
-Se Possuir mais de uma coluna ficaria List.Min (fVendas[Data Pedido] & fVendas[Data Vencimento]).
-*/
+//Alterar somente a Tabela e a coluna de Datas=
 
-    MenorData = List.Min (fVendas[Data]),
-    MaiorData = List.Max (fVendas[Data]),
-	
-//Não alterar daqui pra baixo	
+
+
+// Criando uma lista de Datas únicas e Bufferizando.
+
+    Datas = List.Buffer(List.Distinct(fVendas[DataVenda])),
+
+
+
+//Não alterar daqui pra baixo
+   
+    MenorData = List.Min (Datas),
+    MaiorData = List.Max (Datas),
+  
 	
     DataInicio = Date.StartOfYear(MenorData),
     DataFim = Date.EndOfYear(MaiorData),
@@ -30,7 +35,12 @@ Se Possuir mais de uma coluna ficaria List.Min (fVendas[Data Pedido] & fVendas[D
             Semestre = text,
             Semana = Int64.Type,
             DiaSemana = Int64.Type,
-            NomeDia = text 
+            NomeDia = text,
+            DiaAtual = Logical.Type,
+            MesAtual = Logical.Type,
+            AnoAtual = Logical.Type
+            
+
         ],
         List.Transform(
             ListarDatas,
@@ -48,7 +58,11 @@ Se Possuir mais de uma coluna ficaria List.Min (fVendas[Data Pedido] & fVendas[D
                 Text.From( Number.RoundUp( Date.Month(_)/6,0)) & "º Sem",
                 Date.WeekOfMonth(_),
                 Date.DayOfWeek(_),
-                Date.DayOfWeekName(_)
+                Date.DayOfWeekName(_),
+                Date.IsInCurrentDay(_),
+                Date.IsInCurrentMonth(_),
+                Date.IsInCurrentYear(_)
+                
 
             }
 
