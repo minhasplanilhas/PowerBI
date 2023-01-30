@@ -6,7 +6,7 @@ let
 
 // Criando uma lista de Datas únicas e Bufferizando.
 
-    Datas = List.Buffer(List.Distinct(fVendas[DataEmissao]&fVendas[DataVisita]&fVendas[DataVencimento])),
+    Datas = List.Buffer(List.Distinct(fVendas[DataVenda])),
 
 
 
@@ -14,11 +14,7 @@ let
    
     MenorData = List.Min (Datas),
     MaiorData = List.Max (Datas),
-    DataUltimaVenda = List.Max(List.Buffer(List.Distinct(fVendas[DataEmissao]))),
-    MesUltimaVenda = Text.From(Date.Month(DataUltimaVenda)),
-    AnoUltimaVenda = Text.From(Date.Year(DataUltimaVenda)),
-    AnoMesUltimaVenda = AnoUltimaVenda  & MesUltimaVenda,
-	
+  
 	
     DataInicio = Date.StartOfYear(MenorData),
     DataFim = Date.EndOfYear(MaiorData),
@@ -42,8 +38,8 @@ let
             NomeDia = text,
             DiaAtual = Logical.Type,
             MesAtual = Logical.Type,
-            AnoAtual = Logical.Type,
-            MesUltimaVenda = Logical.Type
+            AnoAtual = Logical.Type
+            
 
         ],
         List.Transform(
@@ -65,8 +61,8 @@ let
                 Date.DayOfWeekName(_),
                 Date.IsInCurrentDay(_),
                 Date.IsInCurrentMonth(_),
-                Date.IsInCurrentYear(_),
-                Text.From(Date.Year(_)) & Text.From((Date.Month(_))) = AnoMesUltimaVenda
+                Date.IsInCurrentYear(_)
+                
 
             }
 
