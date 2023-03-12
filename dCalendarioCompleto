@@ -23,6 +23,7 @@ let
     Tabela = #table(
         type table[
             Data = date,
+            Dia = Int64.Type,
             Ano = Int64.Type,
             NomeMes = text,
             MesAbre = text,
@@ -46,6 +47,7 @@ let
             ListarDatas,
             each {
                 _,
+                Date.Day(_),
                 Date.Year(_),
                 Text.Proper( Date.MonthName(_)),
                 Text.Proper(Text.Start(Date.MonthName(_), 3)),
