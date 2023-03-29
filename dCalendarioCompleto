@@ -6,7 +6,7 @@ let
 
 // Criando uma lista de Datas únicas e Bufferizando.
 
-    Datas = List.Buffer(List.Distinct(fVendas[DataVenda])),
+    Datas = List.Buffer(List.Distinct(fVendas[Data])),
 
 
 
@@ -37,9 +37,11 @@ let
             Semana = Int64.Type,
             DiaSemana = Int64.Type,
             NomeDia = text,
-            DiaAtual = Logical.Type,
-            MesAtual = Logical.Type,
-            AnoAtual = Logical.Type
+            DiaAtualTF = Logical.Type,
+            EMesAtualTF = Logical.Type,
+            EAnoAtualTF = Logical.Type,
+            MesAtual = text,
+            AnoAtual = text
             
 
         ],
@@ -63,7 +65,9 @@ let
                 Date.DayOfWeekName(_),
                 Date.IsInCurrentDay(_),
                 Date.IsInCurrentMonth(_),
-                Date.IsInCurrentYear(_)
+                Date.IsInCurrentYear(_),
+                if Date.IsInCurrentMonth(_) then "Mês Atual" else Text.Proper(Text.Start(Date.MonthName(_), 3)),
+                if Date.IsInCurrentYear(_) then "Ano Atual" else Text.From(Date.Year(_))
                 
 
             }
