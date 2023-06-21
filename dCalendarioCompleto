@@ -19,8 +19,8 @@ let
     MenorData = List.Min (Datas),
     MaiorData = List.Max (Datas),
   
-	//DataInicio = #date(2019,01,01),
-    //DataFim = Date.From(Date.EndOfYear(DateTime.LocalNow())),
+    //MenorData = #date(2019,01,01),
+    //MaiorData = Date.From(Date.EndOfYear(DateTime.LocalNow())),
     DataInicio = Date.StartOfYear(MenorData),
     DataFim = Date.EndOfYear(MaiorData),
     Dias = Duration.Days(DataFim- DataInicio) +1,
