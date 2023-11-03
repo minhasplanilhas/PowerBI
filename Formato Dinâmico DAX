@@ -1,0 +1,33 @@
+VAR _Valor = SELECTEDMEASURE()
+VAR _Formato =
+SWITCH(TRUE(),
+_Valor <= -1000000000, "R$ #,#0,,,.00B; R$ #,#0,,,.0B",
+_Valor <= -1000000, "R$ #,#0,,.00M;R$ #,#0,,.0M",
+_Valor <= -1000, "R$ #,#0,.00K;R$ #,#0,.0K",
+_Valor >= 1000000000, "R$ #,#0,,,.0B",
+_Valor >= 1000000, "R$ #,#0,,.0M",
+_Valor >= 1000, "R$ #,#0,.0K",
+"R$ #,0.00;R$ #,0.00")
+RETURN
+""""&FORMAT(SELECTEDMEASURE(),_Formato)&"""" &""
+
+
+
+
+VAR _Valor = SELECTEDMEASURE()
+VAR _Meta = [Atingimento Meta]
+VAR _Formato =
+SWITCH(TRUE(),
+_Valor <= -1000000000, "R$ #,#0,,,.00B; R$ #,#0,,,.0B",
+_Valor <= -1000000, "R$ #,#0,,.00M;R$ #,#0,,.0M",
+_Valor <= -1000, "R$ #,#0,.00K;R$ #,#0,.0K",
+_Valor >= 1000000000, "R$ #,#0,,,.0B",
+_Valor >= 1000000, "R$ #,#0,,.0M",
+_Valor >= 1000, "R$ #,#0,.0K",
+"R$ #,0.00;R$ #,0.00")
+VAR _Icone =
+IF( _Meta >= 1, " ⇡", " ⇣")
+RETURN
+"""" & FORMAT(_Valor, _Formato) & """" &
+"""" & FORMAT(_Meta, " | 0%") & """" &
+_Icone
