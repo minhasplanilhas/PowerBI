@@ -1,5 +1,14 @@
 let
-    MenorData = #date(2017,01,01),
+
+//Alterar somente a Tabela e a coluna de Datas
+// Você pode deixar a a data inicial fixa alterando DataInicio para DataInicio = #date(2019,01,01) e alterar somente o ano que deseja.
+// A Maior data você pode deixar dinâmico conforme o ano atual, mudando DataFim = Date.EndOfYear(MaiorData), para DataFim = Date.From(Date.EndOfYear(DateTime.LocalNow())
+// Caso utilize as opções acima, pode comentar o parâmetro Datas, MenorData e MaiorData
+
+
+
+  
+    MenorData = #date(2021,01,01),
     MaiorData = Date.From(Date.EndOfYear(DateTime.LocalNow())),
     DataInicio = Date.StartOfYear(MenorData),
     DataFim = Date.EndOfYear(MaiorData),
@@ -26,7 +35,8 @@ let
             EMesAtualTF = Logical.Type,
             EAnoAtualTF = Logical.Type,
             MesAtual = text,
-            AnoAtual = text
+            AnoAtual = text,
+            Data Atual = text
             
 
         ],
@@ -52,7 +62,8 @@ let
                 Date.IsInCurrentMonth(_),
                 Date.IsInCurrentYear(_),
                 if Date.IsInCurrentMonth(_) and Date.IsInCurrentYear(_) then "Mês Atual" else Text.Proper(Text.Start(Date.MonthName(_), 3)),
-                if Date.IsInCurrentYear(_) then "Ano Atual" else Text.From(Date.Year(_))
+                if Date.IsInCurrentYear(_) then "Ano Atual" else Text.From(Date.Year(_)),
+                if Date.IsInCurrentDay(_) then "Dia Atual" else Text.From(_)
                 
 
             }
