@@ -1,0 +1,27 @@
+let
+    Horas = List.Times(#time(0,0,0),24*60*60,#duration(0,0,0,1)),
+    Tabela = #table(
+       type table[
+            Horas = time,
+            Hora = Int64.Type,
+            Minutos = Int64.Type,
+            Segundos = Int64.Type,
+            Hora Completa = text
+            
+
+        ],
+        List.Transform(
+            Horas,
+            each {
+                _,
+                Time.Hour(_),
+                Time.Minute(_),
+                Time.Second(_),
+                Text.PadStart(Text.From(Time.StartOfHour(_)),5)
+            
+            }
+
+        )
+    )
+in
+    Tabela
