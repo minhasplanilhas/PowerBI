@@ -1,0 +1,310 @@
+let
+    //"-----PARAMETROS-----"
+
+    // Defina a data inicial
+    DataInicial = #date(2020, 1, 1),
+
+    // Quantidade de anos a frente da data atual
+    AnosAFuturo = 1,
+
+    // Defina o inicio da semana. Padrao: segunda-feira
+    InicioDaSemana = Day.Monday,
+
+    // Defina o mes de encerramento do ano fiscal. Padrao: 3 (marco)
+    MesFimAnoFiscal = 3,
+
+    /* Dia inicial do mes de fechamento.
+       Padrao: 16 (significa que o mes de fechamento vai do dia 16 do mes atual
+       ate o dia 15 do proximo mes) */
+    DiaInicioMesFechamento = 16,
+
+    //"-----USO INTERNO-----"
+
+    Cultura = "pt-BR",
+
+    RemoverAcentos = (Texto as nullable text) as nullable text =>
+        if Texto = null then null else Text.RemoveDiacritics(Texto),
+
+    DataFinal = Date.AddYears(Date.EndOfYear(Date.From(DateTime.LocalNow())), AnosAFuturo),
+    DataAtual = Date.From(DateTime.LocalNow()),
+    AnoAtual = Date.Year(DataAtual),
+    MesAtual = Date.Month(DataAtual),
+    AnoInicial = Date.Year(DataInicial),
+    AnoFiscalAtual = Date.Year(Date.AddMonths(DataAtual, 12 - MesFimAnoFiscal)),
+
+    TextoAtual = "Atual",
+    PrefixoTrimestre = "T",
+    PrefixoSemestre = "S",
+    PrefixoBimestre = "B",
+    PrefixoQuinzena = "Q",
+    TextoPrimavera = "Primavera",
+    TextoVerao = "Verao",
+    TextoOutono = "Outono",
+    TextoInverno = "Inverno",
+    TextoDiaUtil = "Dia Util",
+    TextoDiaNaoUtil = "Dia Nao Util",
+
+    // Caractere invisivel para ordenacao visual
+    Zws = Character.FromNumber(8203),
+
+    // Lista com todas as datas
+    ListaDatas = List.Dates(DataInicial, Duration.Days(DataFinal - DataInicial) + 1, #duration(1, 0, 0, 0)),
+
+    // Lista com todos os anos
+    IntervaloAnos = List.Buffer({Date.Year(DataInicial)..Date.Year(DataFinal)}),
+
+    //"-----GERAR FERIADOS-----"
+
+    // Feriados fixos que ocorrem todos os anos
+    ListaFeriadosFixos = #table(
+        type table [Dia = Int64.Type, Mes = Int64.Type, Feriado = text],
+        {
+              {  1,  1, "Confraternizacao Universal" }
+            , { 25,  1, "Aniversario da Cidade" }
+            , { 21,  4, "Tiradentes" }
+            , {  1,  5, "Dia do Trabalhador" }
+            , {  9,  7, "Revolucao Constitucionalista" }
+            , {  7,  9, "Independencia do Brasil" }
+            , { 12, 10, "Nossa Senhora Aparecida" }
+            , {  2, 11, "Finados" }
+            , { 15, 11, "Proclamacao da Republica" }
+            , { 20, 11, "Consciencia Negra" }
+            , { 24, 12, "Vespera de Natal" }
+            , { 25, 12, "Natal" }
+            , { 31, 12, "Vespera de Ano Novo" }
+        }
+    ),
+
+    // Funcao que gera os feriados fixos para todos os anos
+    fxGerarFeriadosFixos = (Ano as number) =>
+        Table.AddColumn(
+            ListaFeriadosFixos,
+            "Data",
+            each #date(Ano, [Mes], [Dia]),
+            type date
+        )[[Data], [Feriado]],
+
+    // Gera a tabela de feriados fixos
+    FeriadosFixos = Table.Combine(List.Transform(IntervaloAnos, fxGerarFeriadosFixos)),
+
+    // Funcao que gera os feriados moveis
+    fxGerarFeriadosMoveis = (Ano as number) =>
+    let
+        ModExcel = (x as number, y as number) =>
+            let
+                m = Number.Mod(x, y)
+            in
+                if m < 0 then m + y else m,
+        Pascoa = Date.From(
+            Number.Round(
+                Number.From(#date(Ano, 4, 1)) / 7 + ModExcel(19 * ModExcel(Ano, 19) - 7, 30) * 0.14,
+                0,
+                RoundingMode.Up
+            ) * 7 - 6
+        ),
+        FeriadosMoveis = #table(
+            type table [Data = date, Feriado = text],
+            {
+                  { Date.AddDays(Pascoa, -2), "Sexta-Feira Santa" }
+                , { Pascoa, "Pascoa" }
+                , { Date.AddDays(Pascoa, 60), "Corpus Christi" }
+                //, { Date.AddDays(Pascoa, -48), "Segunda-feira de Carnaval" }
+                //, { Date.AddDays(Pascoa, -47), "Terca-feira de Carnaval" }
+                //, { Date.AddDays(Pascoa, -46), "Quarta-feira de Cinzas" }
+            }
+        )
+    in
+        FeriadosMoveis,
+
+    // Gera a tabela de feriados moveis
+    FeriadosMoveis = Table.Combine(List.Transform(IntervaloAnos, fxGerarFeriadosMoveis)),
+
+    // Tabela com todos os feriados
+    Feriados = Table.Group(
+        Table.Combine({FeriadosFixos, FeriadosMoveis}),
+        {"Data"},
+        {{"Feriado", each Text.Combine(_[Feriado], "/"), type text}}
+    ),
+
+    //"-----GERAR DADOS-----"
+
+    //"-----DATA-----"
+    TabelaDatas = Table.FromList(ListaDatas, Splitter.SplitByNothing(), type table [Data = date]),
+    AdicionarIndiceData = Table.AddIndexColumn(TabelaDatas, "IndiceData", 1, 1, Int64.Type),
+    AdicionarDiasParaHoje = Table.AddColumn(AdicionarIndiceData, "DiasParaHoje", each Number.From([Data] - DataAtual), Int64.Type),
+    AdicionarDataAtual = Table.AddColumn(AdicionarDiasParaHoje, "DataAtual", each if [DiasParaHoje] = 0 then TextoAtual else Date.ToText([Data], "dd/MM/yyyy"), type text),
+
+    //"-----ANO-----"
+    AdicionarAno = Table.AddColumn(AdicionarDataAtual, "Ano", each Date.Year([Data]), Int64.Type),
+    AdicionarAnoInicio = Table.AddColumn(AdicionarAno, "AnoInicio", each Date.StartOfYear([Data]), type date),
+    AdicionarAnoFim = Table.AddColumn(AdicionarAnoInicio, "AnoFim", each Date.EndOfYear([Data]), type date),
+    AdicionarAnoIndice = Table.AddColumn(AdicionarAnoFim, "AnoIndice", each [Ano] - AnoInicial + 1, Int64.Type),
+    AdicionarAnoAtual = Table.AddColumn(AdicionarAnoIndice, "AnoAtual", each if [Ano] = AnoAtual then TextoAtual else Text.From([Ano]), type text),
+
+    //"-----DIA-----"
+    AdicionarDiaDoMes = Table.AddColumn(AdicionarAnoAtual, "DiaDoMes", each Date.Day([Data]), Int64.Type),
+    AdicionarDiaDoAno = Table.AddColumn(AdicionarDiaDoMes, "DiaDoAno", each Date.DayOfYear([Data]), Int64.Type),
+    AdicionarDiaDaSemanaNumero = Table.AddColumn(AdicionarDiaDoAno, "DiaDaSemanaNumero", each Date.DayOfWeek([Data], InicioDaSemana), Int64.Type),
+    AdicionarDiaDaSemanaNome = Table.AddColumn(AdicionarDiaDaSemanaNumero, "DiaDaSemanaNome", each RemoverAcentos(Text.Proper(Date.DayOfWeekName([Data], Cultura))), type text),
+    AdicionarDiaDaSemanaNomeCurto = Table.AddColumn(AdicionarDiaDaSemanaNome, "DiaDaSemanaNomeCurto", each Text.Start([DiaDaSemanaNome], 3), type text),
+    AdicionarDiaDaSemanaIniciais = Table.AddColumn(AdicionarDiaDaSemanaNomeCurto, "DiaDaSemanaIniciais", each Text.Repeat(Zws, 7 - [DiaDaSemanaNumero]) & Text.Start([DiaDaSemanaNome], 1), type text),
+
+    //"-----MES-----"
+    AdicionarMesNumero = Table.AddColumn(AdicionarDiaDaSemanaIniciais, "MesNumero", each Date.Month([Data]), Int64.Type),
+    AdicionarMesNome = Table.AddColumn(AdicionarMesNumero, "MesNome", each RemoverAcentos(Text.Proper(Date.MonthName([Data], Cultura))), type text),
+    AdicionarMesNomeCurto = Table.AddColumn(AdicionarMesNome, "MesNomeCurto", each Text.Start([MesNome], 3), type text),
+    AdicionarMesIniciais = Table.AddColumn(AdicionarMesNomeCurto, "MesIniciais", each Text.Repeat(Zws, 12 - [MesNumero]) & Text.Start([MesNome], 1), type text),
+    AdicionarMesAnoNome = Table.AddColumn(AdicionarMesIniciais, "MesAnoNome", each RemoverAcentos(Text.Proper(Date.ToText([Data], [Format = "MMM/yy", Culture = Cultura]))), type text),
+    AdicionarMesAnoNumero = Table.AddColumn(AdicionarMesAnoNome, "MesAnoNumero", each [Ano] * 100 + [MesNumero], Int64.Type),
+    AdicionarMesDiaNumero = Table.AddColumn(AdicionarMesAnoNumero, "MesDiaNumero", each [MesNumero] * 100 + [DiaDoMes], Int64.Type),
+    AdicionarMesAtualNome = Table.AddColumn(AdicionarMesDiaNumero, "MesAtualNome", each if [Ano] = AnoAtual and [MesNumero] = MesAtual then TextoAtual else [MesNome], type text),
+    AdicionarMesAtualNomeCurto = Table.AddColumn(AdicionarMesAtualNome, "MesAtualNomeCurto", each if [Ano] = AnoAtual and [MesNumero] = MesAtual then TextoAtual else [MesNomeCurto], type text),
+    AdicionarMesAnoAtualNome = Table.AddColumn(AdicionarMesAtualNomeCurto, "MesAnoAtualNome", each if [Ano] = AnoAtual and [MesNumero] = MesAtual then TextoAtual else [MesAnoNome], type text),
+
+    //"-----TRIMESTRE-----"
+    AdicionarTrimestreNumero = Table.AddColumn(AdicionarMesAnoAtualNome, "TrimestreNumero", each Date.QuarterOfYear([Data]), Int64.Type),
+    AdicionarTrimestreNome = Table.AddColumn(AdicionarTrimestreNumero, "TrimestreNome", each PrefixoTrimestre & Text.From([TrimestreNumero]), type text),
+    AdicionarTrimestreAnoNome = Table.AddColumn(AdicionarTrimestreNome, "TrimestreAnoNome", each [TrimestreNome] & " " & Text.End(Text.From([Ano]), 2), type text),
+    AdicionarTrimestreAnoNumero = Table.AddColumn(AdicionarTrimestreAnoNome, "TrimestreAnoNumero", each [Ano] * 100 + [TrimestreNumero], Int64.Type),
+    AdicionarTrimestreAtual = Table.AddColumn(AdicionarTrimestreAnoNumero, "TrimestreAtual", each if [Ano] = AnoAtual and [TrimestreNumero] = Date.QuarterOfYear(DataAtual) then TextoAtual else [TrimestreNome], type text),
+    AdicionarTrimestreAnoAtual = Table.AddColumn(AdicionarTrimestreAtual, "TrimestreAnoAtual", each if [Ano] = AnoAtual and [TrimestreNumero] = Date.QuarterOfYear(DataAtual) then TextoAtual else [TrimestreAnoNome], type text),
+
+    //"-----SEMANA-----"
+    AdicionarSemanaDoMesNumero = Table.AddColumn(AdicionarTrimestreAnoAtual, "SemanaDoMesNumero", each Date.WeekOfMonth([Data], InicioDaSemana), Int64.Type),
+
+    //"-----SEMESTRE-----"
+    AdicionarSemestreNumero = Table.AddColumn(AdicionarSemanaDoMesNumero, "SemestreNumero", each if [MesNumero] <= 6 then 1 else 2, Int64.Type),
+    AdicionarSemestreAnoNome = Table.AddColumn(AdicionarSemestreNumero, "SemestreAnoNome", each PrefixoSemestre & Text.From([SemestreNumero]) & " " & Text.From([Ano]), type text),
+    AdicionarSemestreAnoNumero = Table.AddColumn(AdicionarSemestreAnoNome, "SemestreAnoNumero", each [Ano] * 100 + [SemestreNumero], Int64.Type),
+    AdicionarSemestreIndice = Table.AddColumn(AdicionarSemestreAnoNumero, "SemestreIndice", each (2 * ([Ano] - AnoInicial)) + [SemestreNumero], Int64.Type),
+    AdicionarSemestresParaHoje = Table.AddColumn(AdicionarSemestreIndice, "SemestresParaHoje", each [SemestreIndice] - (2 * (AnoAtual - AnoInicial) + (if MesAtual <= 6 then 1 else 2)), Int64.Type),
+    AdicionarSemestreAtual = Table.AddColumn(AdicionarSemestresParaHoje, "SemestreAtual", each if [SemestresParaHoje] = 0 then TextoAtual else [SemestreAnoNome], type text),
+
+    //"-----BIMESTRE-----"
+    AdicionarBimestreNumero = Table.AddColumn(AdicionarSemestreAtual, "BimestreNumero", each Number.RoundUp([MesNumero] / 2), Int64.Type),
+    AdicionarBimestreAnoNome = Table.AddColumn(AdicionarBimestreNumero, "BimestreAnoNome", each PrefixoBimestre & Text.From([BimestreNumero]) & " " & Text.From([Ano]), type text),
+    AdicionarBimestreAnoNumero = Table.AddColumn(AdicionarBimestreAnoNome, "BimestreAnoNumero", each [Ano] * 100 + [BimestreNumero], Int64.Type),
+    AdicionarBimestreIndice = Table.AddColumn(AdicionarBimestreAnoNumero, "BimestreIndice", each (6 * ([Ano] - AnoInicial)) + [BimestreNumero], Int64.Type),
+    AdicionarBimestresParaHoje = Table.AddColumn(AdicionarBimestreIndice, "BimestresParaHoje", each (6 * ([Ano] - AnoInicial) + [BimestreNumero]) - ((6 * (AnoAtual - AnoInicial)) + Number.RoundUp(MesAtual / 2)), Int64.Type),
+    AdicionarBimestreAtual = Table.AddColumn(AdicionarBimestresParaHoje, "BimestreAtual", each if [BimestresParaHoje] = 0 then TextoAtual else [BimestreAnoNome], type text),
+
+    //"-----QUINZENA-----"
+    AdicionarQuinzenaDoMesNumero = Table.AddColumn(AdicionarBimestreAtual, "QuinzenaDoMesNumero", each if [DiaDoMes] <= 15 then 1 else 2, Int64.Type),
+    AdicionarQuinzenaMesNumero = Table.AddColumn(AdicionarQuinzenaDoMesNumero, "QuinzenaMesNumero", each [MesNumero] * 10 + [QuinzenaDoMesNumero], Int64.Type),
+    AdicionarQuinzenaMesNome = Table.AddColumn(AdicionarQuinzenaMesNumero, "QuinzenaMesNome", each [MesNomeCurto] & " " & Text.From([QuinzenaDoMesNumero]), type text),
+    AdicionarQuinzenaMesAnoNumero = Table.AddColumn(AdicionarQuinzenaMesNome, "QuinzenaMesAnoNumero", each [Ano] * 10000 + [MesNumero] * 100 + [QuinzenaMesNumero], Int64.Type),
+    AdicionarQuinzenaMesAnoNome = Table.AddColumn(AdicionarQuinzenaMesAnoNumero, "QuinzenaMesAnoNome", each PrefixoQuinzena & Text.From([QuinzenaDoMesNumero]) & " " & [MesNomeCurto] & " " & Text.From([Ano]), type text),
+    AdicionarQuinzenaIndice = Table.AddColumn(AdicionarQuinzenaMesAnoNome, "QuinzenaIndice", each 24 * ([Ano] - Date.Year(DataInicial)) + 2 * ([MesNumero] - Date.Month(DataInicial)) + [QuinzenaDoMesNumero], Int64.Type),
+    AdicionarQuinzenasParaHoje = Table.AddColumn(AdicionarQuinzenaIndice, "QuinzenasParaHoje", each [QuinzenaIndice] - ((24 * (AnoAtual - Date.Year(DataInicial))) + (2 * (MesAtual - Date.Month(DataInicial))) + (if Date.Day(DataAtual) <= 15 then 1 else 2)), Int64.Type),
+    AdicionarQuinzenaAtual = Table.AddColumn(AdicionarQuinzenasParaHoje, "QuinzenaAtual", each if [QuinzenasParaHoje] = 0 then TextoAtual else [QuinzenaMesNome], type text),
+
+    //"-----FECHAMENTO-----"
+    AdicionarDataRefFechamento = Table.AddColumn(AdicionarQuinzenaAtual, "DataRefFechamento", each if [DiaDoMes] <= DiaInicioMesFechamento then [Data] else Date.AddMonths([Data], 1), type date),
+    AdicionarAnoFechamento = Table.AddColumn(AdicionarDataRefFechamento, "AnoFechamento", each Date.Year([DataRefFechamento]), Int64.Type),
+    AdicionarMesFechamentoNome = Table.AddColumn(AdicionarAnoFechamento, "MesFechamentoNome", each RemoverAcentos(Text.Proper(Date.MonthName([DataRefFechamento], Cultura))), type text),
+    AdicionarMesFechamentoNomeCurto = Table.AddColumn(AdicionarMesFechamentoNome, "MesFechamentoNomeCurto", each Text.Start([MesFechamentoNome], 3), type text),
+    AdicionarMesFechamentoNumero = Table.AddColumn(AdicionarMesFechamentoNomeCurto, "MesFechamentoNumero", each Date.Month([DataRefFechamento]), Int64.Type),
+    AdicionarMesFechamentoAnoNome = Table.AddColumn(AdicionarMesFechamentoNumero, "MesFechamentoAnoNome", each [MesFechamentoNomeCurto] & "/" & Text.End(Text.From([AnoFechamento]), 2), type text),
+    AdicionarMesFechamentoAnoNumero = Table.AddColumn(AdicionarMesFechamentoAnoNome, "MesFechamentoAnoNumero", each [AnoFechamento] * 100 + [MesFechamentoNumero], Int64.Type),
+
+    //"-----ESTACOES-----"
+    AdicionarEstacaoNorteNumero = Table.AddColumn(
+        AdicionarMesFechamentoAnoNumero,
+        "EstacaoNorteNumero",
+        each if [MesDiaNumero] >= 321 and [MesDiaNumero] <= 620 then 1
+             else if [MesDiaNumero] >= 621 and [MesDiaNumero] <= 921 then 2
+             else if [MesDiaNumero] >= 922 and [MesDiaNumero] <= 1221 then 3
+             else 4,
+        Int64.Type
+    ),
+    AdicionarEstacaoNorteNome = Table.AddColumn(
+        AdicionarEstacaoNorteNumero,
+        "EstacaoNorteNome",
+        each if [EstacaoNorteNumero] = 1 then TextoPrimavera
+             else if [EstacaoNorteNumero] = 2 then TextoVerao
+             else if [EstacaoNorteNumero] = 3 then TextoOutono
+             else TextoInverno,
+        type text
+    ),
+    AdicionarEstacaoSulNumero = Table.AddColumn(
+        AdicionarEstacaoNorteNome,
+        "EstacaoSulNumero",
+        each if [MesDiaNumero] >= 321 and [MesDiaNumero] <= 620 then 1
+             else if [MesDiaNumero] >= 621 and [MesDiaNumero] <= 921 then 2
+             else if [MesDiaNumero] >= 922 and [MesDiaNumero] <= 1221 then 3
+             else 4,
+        Int64.Type
+    ),
+    AdicionarEstacaoSulNome = Table.AddColumn(
+        AdicionarEstacaoSulNumero,
+        "EstacaoSulNome",
+        each if [EstacaoNorteNumero] = 1 then TextoOutono
+             else if [EstacaoNorteNumero] = 2 then TextoInverno
+             else if [EstacaoNorteNumero] = 3 then TextoPrimavera
+             else TextoVerao,
+        type text
+    ),
+
+    //"-----DIA UTIL-----"
+    AdicionarFeriado = Table.RenameColumns(
+        Table.RemoveColumns(
+            Table.Join(AdicionarEstacaoSulNome, "Data", Table.PrefixColumns(Feriados, "f"), "f.Data", JoinKind.LeftOuter, JoinAlgorithm.LeftIndex),
+            "f.Data"
+        ),
+        {{"f.Feriado", "Feriado"}}
+    ),
+    AdicionarDiaUtilNumero = Table.AddColumn(AdicionarFeriado, "DiaUtilNumero", each if [Feriado] <> null or Date.DayOfWeek([Data], Day.Monday) > 4 then 0 else 1, Int64.Type),
+    AdicionarDiaUtilNome = Table.AddColumn(AdicionarDiaUtilNumero, "DiaUtilNome", each if [DiaUtilNumero] = 1 then TextoDiaUtil else TextoDiaNaoUtil, type text),
+
+    //"-----COLUNAS FISCAIS-----"
+
+    //"-----ANO FISCAL-----"
+    AdicionarAnoFiscalInicioNumero = Table.AddColumn(AdicionarDiaUtilNome, "AnoFiscalInicioNumero", each Date.Year(Date.AddMonths([Data], -MesFimAnoFiscal)), Int64.Type),
+    AdicionarAnoFiscalFimNumero = Table.AddColumn(AdicionarAnoFiscalInicioNumero, "AnoFiscalFimNumero", each [AnoFiscalInicioNumero] + 1, Int64.Type),
+    AdicionarAnoFiscal = Table.AddColumn(AdicionarAnoFiscalFimNumero, "AnoFiscal", each "AF " & Text.From([AnoFiscalInicioNumero]) & "-" & Text.From([AnoFiscalFimNumero]), type text),
+    AdicionarAnoFiscalInicio = Table.AddColumn(AdicionarAnoFiscal, "AnoFiscalInicio", each #date([AnoFiscalInicioNumero], if MesFimAnoFiscal = 12 then 1 else MesFimAnoFiscal + 1, 1), type date),
+    AdicionarAnoFiscalFim = Table.AddColumn(AdicionarAnoFiscalInicio, "AnoFiscalFim", each Date.EndOfMonth(#date([AnoFiscalFimNumero], MesFimAnoFiscal, 1)), type date),
+    AdicionarAnoFiscalAtual = Table.AddColumn(AdicionarAnoFiscalFim, "AnoFiscalAtual", each if [AnoFiscalInicioNumero] = AnoFiscalAtual then TextoAtual else [AnoFiscal], type text),
+    AdicionarAnosFiscaisParaHoje = Table.AddColumn(AdicionarAnoFiscalAtual, "AnosFiscaisParaHoje", each [AnoFiscalInicioNumero] - AnoFiscalAtual, Int64.Type),
+
+    //"-----MES FISCAL-----"
+    AdicionarMesFiscalNumero = Table.AddColumn(AdicionarAnosFiscaisParaHoje, "MesFiscalNumero", each Date.Month(Date.AddMonths([Data], -MesFimAnoFiscal)), Int64.Type),
+    AdicionarMesFiscalNome = Table.AddColumn(AdicionarMesFiscalNumero, "MesFiscalNome", each RemoverAcentos(Text.Proper(Date.ToText([Data], [Format = "MMMM", Culture = Cultura]))), type text),
+    AdicionarMesFiscalNomeCurto = Table.AddColumn(AdicionarMesFiscalNome, "MesFiscalNomeCurto", each Text.Start([MesFiscalNome], 3), type text),
+    AdicionarMesFiscalAtual = Table.AddColumn(AdicionarMesFiscalNomeCurto, "MesFiscalAtual", each if Date.IsInCurrentMonth([Data]) then TextoAtual else [MesFiscalNome], type text),
+    AdicionarAnoFiscalMesNome = Table.AddColumn(AdicionarMesFiscalAtual, "AnoFiscalMesNome", each [MesFiscalNomeCurto] & " " & [AnoFiscal], type text),
+    AdicionarAnoFiscalMesNumero = Table.AddColumn(AdicionarAnoFiscalMesNome, "AnoFiscalMesNumero", each [AnoFiscalInicioNumero] * 100 + [MesFiscalNumero], Int64.Type),
+    AdicionarAnoFiscalMesAtual = Table.AddColumn(AdicionarAnoFiscalMesNumero, "AnoFiscalMesAtual", each if [AnoFiscalAtual] = TextoAtual and [MesFiscalAtual] = TextoAtual then TextoAtual else [AnoFiscalMesNome], type text),
+    AdicionarMesesFiscaisParaHoje = Table.AddColumn(
+        AdicionarAnoFiscalMesAtual,
+        "MesesFiscaisParaHoje",
+        each [
+            MesFiscalAtualNumero = Date.Month(Date.AddMonths(DataAtual, -MesFimAnoFiscal)),
+            Valor = (([AnoFiscalInicioNumero] - AnoFiscalAtual) * 12) + ([MesFiscalNumero] - MesFiscalAtualNumero)
+        ][Valor],
+        Int64.Type
+    ),
+
+    //"-----TRIMESTRE FISCAL-----"
+    AdicionarTrimestreFiscalNumero = Table.AddColumn(AdicionarMesesFiscaisParaHoje, "TrimestreFiscalNumero", each Number.RoundUp([MesFiscalNumero] / 3), Int64.Type),
+    AdicionarTrimestreFiscalNome = Table.AddColumn(AdicionarTrimestreFiscalNumero, "TrimestreFiscalNome", each "TF " & Text.From([TrimestreFiscalNumero]), type text),
+    AdicionarMesDoTrimestreFiscalNumero = Table.AddColumn(AdicionarTrimestreFiscalNome, "MesDoTrimestreFiscalNumero", each [MesFiscalNumero] - 3 * ([TrimestreFiscalNumero] - 1), Int64.Type),
+    AdicionarAnoFiscalTrimestreNome = Table.AddColumn(AdicionarMesDoTrimestreFiscalNumero, "AnoFiscalTrimestreNome", each [TrimestreFiscalNome] & " | " & [AnoFiscal], type text),
+    AdicionarAnoFiscalTrimestreNumero = Table.AddColumn(AdicionarAnoFiscalTrimestreNome, "AnoFiscalTrimestreNumero", each [AnoFiscalInicioNumero] * 100 + [TrimestreFiscalNumero], Int64.Type),
+    AdicionarTrimestreFiscalInicio = Table.AddColumn(AdicionarAnoFiscalTrimestreNumero, "TrimestreFiscalInicio", each Date.StartOfMonth(Date.AddMonths([Data], 1 - [MesDoTrimestreFiscalNumero])), type date),
+    AdicionarTrimestreFiscalFim = Table.AddColumn(AdicionarTrimestreFiscalInicio, "TrimestreFiscalFim", each Date.EndOfMonth(Date.AddMonths([Data], 3 - [MesDoTrimestreFiscalNumero])), type date),
+    AdicionarTrimestresFiscaisParaHoje = Table.AddColumn(
+        AdicionarTrimestreFiscalFim,
+        "TrimestresFiscaisParaHoje",
+        each [
+            MesFiscalAtualNumero = Date.Month(Date.AddMonths(DataAtual, -MesFimAnoFiscal)),
+            TrimestreFiscalAtualNumero = Number.RoundUp(MesFiscalAtualNumero / 3),
+            Valor = (([AnoFiscalInicioNumero] - AnoFiscalAtual) * 4) + ([TrimestreFiscalNumero] - TrimestreFiscalAtualNumero)
+        ][Valor],
+        Int64.Type
+    ),
+    AdicionarTrimestreFiscalAtual = Table.AddColumn(AdicionarTrimestresFiscaisParaHoje, "TrimestreFiscalAtual", each if [TrimestresFiscaisParaHoje] = 0 then TextoAtual else [AnoFiscalTrimestreNome], type text),
+    AdicionarDiaDoTrimestreFiscal = Table.AddColumn(AdicionarTrimestreFiscalAtual, "DiaDoTrimestreFiscal", each Number.From([Data] - [TrimestreFiscalInicio]) + 1, Int64.Type)
+
+in
+    AdicionarDiaDoTrimestreFiscal
